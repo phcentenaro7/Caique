@@ -122,7 +122,7 @@ function lexicographicRule(B, bbar::Vector, yk::Vector, iB::Vector{Int}, lp::Lin
     minratio = minimum(ratios)
     Ij = findall(x -> x == minratio, ratios)
     j = 1
-    for j in 1:length(iB)
+    while(length(Ij) > 1)
         aj = @view lp.A[:, iB[j]]
         yj = B\aj
         ratios = []
@@ -135,9 +135,6 @@ function lexicographicRule(B, bbar::Vector, yk::Vector, iB::Vector{Int}, lp::Lin
         end
         minratio = minimum(ratios)
         Ij = findall(x -> x == minratio, ratios)
-        if length(Ij) == 1
-            break
-        end
         j = j + 1
     end
     r = Ij[1]

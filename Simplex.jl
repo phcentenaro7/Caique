@@ -127,7 +127,7 @@ function unboundednessTest!(d::SimplexData)
 end
 
 function blockingVariableSelection!(d::SimplexData)
-    d.r = @match d.anticycling begin
+    @match d.anticycling begin
         true => lexicographicRule!(d)
         false => minRatioTest!(d)
     end
@@ -142,7 +142,7 @@ function minRatioTest!(d::SimplexData)
             push!(ratios, Inf)
         end
     end
-    d.r = findmin(ratios)
+    d.r = findmin(ratios)[2]
 end
 
 function lexicographicRule!(d::SimplexData)
@@ -157,7 +157,7 @@ function lexicographicRule!(d::SimplexData)
     minratio = minimum(ratios)
     Ij = findall(x -> x == minratio, ratios)
     j = 1
-    for j in 1:length(d.iB)
+    while(length(Ij) > 1)
         aj = @view d.A[:, d.iB[j]]
         yj = d.Blu\aj
         ratios = []
@@ -170,9 +170,6 @@ function lexicographicRule!(d::SimplexData)
         end
         minratio = minimum(ratios)
         Ij = findall(x -> x == minratio, ratios)
-        if length(Ij) == 1
-            break
-        end
         j = j + 1
     end
     d.r = Ij[1]
