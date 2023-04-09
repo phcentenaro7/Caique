@@ -195,7 +195,7 @@ function lexicographicRule(B, bbar::Vector, yk::Vector, iB::Vector{Int}, lp::Lin
     #   ❤ MAIN STEP
     #       1. Calculate the vector q₀ = b̄ₙ/yₙₖ.
     #       2. Let I₀ be the set of indices i such that b̄ᵢ/yᵢₖ = min{q}. If |I₀| = 1, then return r such that I₀ = {r}.
-    #       3. Calculate the vector qⱼ = yᵢⱼ/yᵢₖ, i ∈ Iⱼ₋₁.
+    #       3. Calculate the vector qⱼ = yᵢⱼ/yᵢₖ, with yᵢₖ > 0 and i ∈ Iⱼ₋₁.
     #       4. Let Iⱼ be the set of indices i such that yᵢⱼ/yᵢₖ = min{qⱼ}. If |Iⱼ| = 1, then return r such that Iⱼ = {r}.
     #       5. Increment j by one and repeat step 3.
     m = size(lp.A, 1)
