@@ -9,112 +9,147 @@ mutable struct Solution
     type::Symbol #Whether this is a minimization or maximization problem.
     conclusion::Symbol #Whether the problem is bounded, unbounded or tired.
     ray::Matrix #In case the problem is unbounded, this matrix contains the vectors of the ray sum [bbar; 0] + xk[-yk; ek].
-    xB::Vector #Variable values.
+    xB::Vector{Real} #Variable values.
     iB::Vector{Int} #Basic variable indices.
-    z #Objective value at the optimal point.
-    iterations::Int #Number of iterations it took to complete the solution.
+    z::Real #Objective value at the optimal point.
+    iterations::Int #Real of iterations it took to complete the solution.
         function Solution(type::Symbol, conclusion::Symbol, ray::Matrix, xB::Vector, iB::Vector{Int},
         z, iterations::Int)
         new(type, conclusion, ray, xB, iB, z, iterations)
     end
 end
 
+mutable struct SimplexData
+    A::Matrix{Real}
+    b::Vector{Real}
+    m::Int
+    n::Int
+    c::Vector{Real}
+    z::Real
+    k::Int
+    r::Int
+    yk::Vector{Real}
+    iB::Vector{Int}
+    iN::Vector{Int}
+    xB::Vector{Real}
+    bbar::Vector{Real}
+    Blu::LU
+    iter::Int
+    anticycling::Bool
+    solution::Solution
+    
+    function SimplexData()
+        new()
+    end
+end
+
 function simplex(lp::LinearProgram, iB::Vector{Int}, phase::Symbol, type::Symbol, anticycling::Bool, maxiter::Int)
-    m = size(lp.A, 1)
-    c = []
+    data = SimplexData()
+    initializeSimplex!(lp, iB, phase, type, anticycling, data)
+    while data.iter < maxiter
+        initialStep!(data)
+        pricing!(data) && return data.solution
+        unboundednessTest!(data) && return data.solution
+        blockingVariableSelection!(data)
+        dantzigRule!(data)
+    end
+    return data.solution
+end
+
+function initializeSimplex!(lp::LinearProgram, iB::Vector{Int}, phase::Symbol, type::Symbol, anticycling::Bool, d::SimplexData)
+    d.m = size(lp.A, 1)
     @match phase begin
         :one => begin
             nart = length(lp.iA)
-            n = size(lp.A, 2)
-            c = vcat(zeros(n - nart), ones(nart))
+            d.n = size(lp.A, 2)
+            d.c = vcat(zeros(d.n - nart), ones(nart))
         end
         :two => begin
-            n = size(lp.A, 2) - length(lp.iA)
-            c = @match type begin
+            d.n = size(lp.A, 2) - length(lp.iA)
+            d.c = @match type begin
                 :max => -lp.c
                 :min => lp.c[:]
                 _ => throw(ArgumentError("Argument 'type' must be :min for minimization or :max for maximization."))
             end
         end
     end
-    A = @view lp.A[:, 1:n]
-    b = @view lp.b[:]
-    iN = setdiff(1:n, iB)
-    solution = Solution(type, :tired, [0. 0], zeros(m), iB, 0., 1)
-    while solution.iterations < maxiter
-        B, Blu, bbar = initialStep!(lp, c, iB, iN, solution)
-        done, zbark, k = pricing!(Blu, lp, c, iB, iN, solution)
-        done && break
-        done, yk = unboundednessTest!(Blu, lp, iN, k, solution)
-        done && break
-        r = @match anticycling begin
-            false => minRatioTest(bbar, yk)
-            true => lexicographicRule(B, bbar, yk, iB, lp)
-        end
-        dantzigRule!(iB, iN, r, k)
-        solution.iterations += 1
-    end
-    return solution
+    d.A = @view lp.A[:, 1:d.n]
+    d.b = @view lp.b[:]
+    d.iB = iB
+    d.iN = setdiff(1:d.n, d.iB)
+    d.anticycling = anticycling
+    d.solution = Solution(type, :tired, [0. 0], Real[], iB, 0, 1)
+    d.iter = 1
 end
 
-function initialStep!(lp::LinearProgram, c::Vector, iB::Vector{Int}, iN::Vector{Int}, solution)
-    B = @view lp.A[:, iB]
-    Blu = lu(B)
-    solution.xB = Blu\lp.b
-    solution.z = c[iB]'solution.xB
-    bbar = solution.xB
-    return B, Blu, bbar
+function initialStep!(d::SimplexData)
+    B = d.A[:, d.iB]
+    d.Blu = lu(B)
+    d.xB = d.Blu\d.b
+    d.z = d.c[d.iB]'d.xB
+    d.bbar = d.xB
 end
 
-function pricing!(B, lp::LinearProgram, c::Vector, iB::Vector{Int}, iN::Vector{Int}, solution::Solution)
-    w = B'\c[iB]
-    N = @view lp.A[:, iN]
-    zbar = N'w - c[iN]
-    zbark, k = findmax(zbar)
+function pricing!(d::SimplexData)
+    w = d.Blu'\d.c[d.iB]
+    N = @view d.A[:, d.iN]
+    zbar = N'w - d.c[d.iN]
+    zbark, d.k = findmax(zbar)
     if zbark <= 0
-        solution.conclusion = :bounded
-        return true, nothing, nothing
+        d.solution.conclusion = :bounded
+        d.solution.xB = d.xB
+        d.solution.iB = d.iB
+        d.solution.z = d.z
+        d.solution.iterations = d.iter
+        return true
     end
-    return false, zbark, k
+    return false
 end
 
-function unboundednessTest!(B, lp::LinearProgram, iN::Vector{Int}, k::Int, solution::Solution)
-    ak = @view lp.A[:, iN[k]]
-    yk = B\ak
-    if maximum(yk) <= 0
-        ek = zeros(n-m)
+function unboundednessTest!(d::SimplexData)
+    ak = d.A[:, d.iN[d.k]]
+    d.yk = d.Blu\ak
+    if maximum(d.yk) <= 0
+        ek = zeros(d.n-d.m)
         ek[k] = 1
-        ray = [bbar -yk; zeros(n-m) ek]
-        val = @match type begin
+        d.solution.conclusion = :unbounded
+        d.solution.ray = [d.bbar -d.yk; zeros(d.n-d.m) ek]
+        d.z = @match type begin
             :max => Inf
             :min => -Inf
         end
-        solution.conclusion = :unbounded
-        return true, nothing
+        d.solution.xB = d.xB
+        d.solution.iB = d.iB
+        d.solution.iterations = d.iter
+        return true
     end
-    return false, yk
+    return false
 end
 
-function minRatioTest(bbar::Vector, yk::Vector)
-    m = size(lp.A, 1)
+function blockingVariableSelection!(d::SimplexData)
+    d.r = @match d.anticycling begin
+        true => lexicographicRule!(d)
+        false => minRatioTest!(d)
+    end
+end
+
+function minRatioTest!(d::SimplexData)
     ratios = []
-    for i in 1:m
-        if yk[i] > 0
-            push!(ratios, bbar[i]/yk[i])
+    for i in 1:d.m
+        if d.yk[i] > 0
+            push!(ratios, d.bbar[i]/d.yk[i])
         else
             push!(ratios, Inf)
         end
     end
-    r = findmin(ratios)
-    return r
+    d.r = findmin(ratios)
 end
 
-function lexicographicRule(B, bbar::Vector, yk::Vector, iB::Vector{Int}, lp::LinearProgram)
-    m = size(lp.A, 1)
+function lexicographicRule!(d::SimplexData)
     ratios = []
-    for i in 1:m
-        if yk[i] > 0
-            push!(ratios, bbar[i]/yk[i])
+    for i in 1:d.m
+        if d.yk[i] > 0
+            push!(ratios, d.bbar[i]/d.yk[i])
         else
             push!(ratios, Inf)
         end
@@ -122,13 +157,13 @@ function lexicographicRule(B, bbar::Vector, yk::Vector, iB::Vector{Int}, lp::Lin
     minratio = minimum(ratios)
     Ij = findall(x -> x == minratio, ratios)
     j = 1
-    for j in 1:length(iB)
-        aj = @view lp.A[:, iB[j]]
-        yj = B\aj
+    for j in 1:length(d.iB)
+        aj = @view d.A[:, d.iB[j]]
+        yj = d.Blu\aj
         ratios = []
-        for i in 1:m
-            if yk[i] > 0 && i in Ij
-                push!(ratios, yj[i]/yk[i])
+        for i in 1:d.m
+            if d.yk[i] > 0 && i in Ij
+                push!(ratios, yj[i]/d.yk[i])
             else
                 push!(ratios, Inf)
             end
@@ -140,10 +175,10 @@ function lexicographicRule(B, bbar::Vector, yk::Vector, iB::Vector{Int}, lp::Lin
         end
         j = j + 1
     end
-    r = Ij[1]
-    return r
+    d.r = Ij[1]
 end
 
-function dantzigRule!(iB::Vector{Int}, iN::Vector{Int}, r::Int, k::Int)
-    iB[r], iN[k] = iN[k], iB[r]
+function dantzigRule!(d::SimplexData)
+    d.iB[d.r], d.iN[d.k] = d.iN[d.k], d.iB[d.r]
+    d.iter += 1
 end
