@@ -1,25 +1,16 @@
 #PH Centenaro
 
-##Packages
 using LinearAlgebra
 using Match
 
-##Linear program definition
-#Represents a linear programming problem in canonical form. This means that every inequality constraint
-#is turned into an equality constraint through the inclusion of slack variables. Furthermore, if there are
-#any negative values in the right-hand-side vector b, they are turned positive, and the respective constraints
-#are changed accordingly. If an initial basis vector iB is not specified by the user, artificial variables may
-#be added as well. Though some values might be changed in the conversion to canonical form, the arguments
-#passed to the constructor are preserved.
 struct LinearProgram
-    c::Vector #Cost vector.
-    A::Matrix #Restrictions matrix.
-    b::Vector #Right-hand side values of constraints.
-    iB::Vector{Int} #Vector of initial basic variables.
-    iA::Vector{Int} #Vector of artificial variables.
+    c::Vector
+    A::Matrix
+    b::Vector
+    iB::Vector{Int}
+    iA::Vector{Int}
 
     function LinearProgram(c::Vector, A::Matrix, signs::Vector{Symbol}, b::Vector; iB::Vector{Int}=Int[])
-        #Ensures that the problem is modeled correctly.
         A = copy(A)
         b = copy(b)
         c = copy(c)
@@ -48,21 +39,6 @@ struct LinearProgram
 end
 
 function createSlackSubmatrix!(c::Vector, A::Matrix, signs::Vector{Symbol}, b::Vector)
-    #The following piece of code takes care of adding slack variables to the linear program.
-    #Let i be the constraint row currently under analysis. Then we can define our algorithm as follows:
-    #   ❤ MAIN STEP
-    #       1. If i > m, stop. Return the current slack matrix.
-    #       2. Verify the value of bᵢ. If it is negative, multiply bᵢ and Aᵢ by -1. If it's an equality constraint,
-    #          keep it as such. Otherwise, if it's a ≥ constraint, make it ≤ and vice versa.
-    #       3. Verify the constraint sign. If it's ≤, add an eᵢ (ith unit) vector to the slack matrix. If it's ≥,
-    #          add an -eᵢ vector to the slack matrix. In either case, append a 0 to the cost vector.
-    #       4. Increment i by one and return to step 1.
-    #This procedure ensures the creation of slack variables where necessary. Note that, by adding slack variables,
-    #we are producing a different description of the same problem. However, it might be the case that the slack
-    #variables aren't enough to get the simplex method going. If by step 3 every constraint turns out to be a ≤
-    #constraint, then the slack variables are enough to produce an acceptable initial basic feasible solution.
-    #If, however, any constraints are = or ≥, then, in the absence of a user-defined initial basic feasible solution,
-    #an artificial submatrix becomes necessary.
     m = size(A, 1)
     slack = Array{Float64}(undef, m, 0)
     for i in 1:m
@@ -95,30 +71,6 @@ function createSlackSubmatrix!(c::Vector, A::Matrix, signs::Vector{Symbol}, b::V
 end
 
 function createArtificialSubmatrix!(c::Vector, A::Matrix, slack::Matrix, iB::Vector{Int}, iA::Vector{Int})
-    #The following piece of code deals with the problem of adding artificial variables to the linear program.
-    #This algorithm begins at the first element of the first slack variable column, and it ends at the last
-    #element of the last slack variable column.
-    #The algorithm can be formulated as follows:
-    #   ❤ INITIAL STEP
-    #       1. If there aren't any slack variables, set the artificial matrix to I and put all the artificial
-    #          variables in the basis, in ascending order of indices. Return the artificial matrix.
-    #       2. Add as many zeros to the cost coefficient vector as there are slack variables.
-    #       3. Select the first slack variable column in the constraint matrix.
-    #       4. Select the first row of this column.
-    #       We will henceforth name the current row and column i and j, respectively.
-    #       Moreover, let A be an mxn constraint matrix after the inclusion of the slack variables.
-    #   ❤ MAIN STEP
-    #       1. If i > m, stop. Return the current artificial matrix.
-    #       2. If Aᵢⱼ = 1 and j ≠ n, increment j by one, put the slack variable in the basis and go to step 5.
-    #       3. Add an eᵢ (ith unit) vector to the artificial matrix, put the artificial variable in the basis
-    #          and add a zero to the cost vector.
-    #       4. If Aᵢⱼ = -1 and j ≠ n, increment j by one.
-    #       5. Increment i by one and return to step 1.
-    #This procedure guarantees that, after the concatenation of the constraint matrix and the artificial matrix,
-    #there will be at least m columns that, when organized, constitute an identity submatrix. Moreover, by
-    #proceeding through the constraint matrix in an orderly fashion, the m desired variables are added to the basis
-    #in precisely the order needed to produce the identity matrix. Hence no ordering is needed after the inclusion
-    #of the slack variables.
     nslack = size(slack, 2)
     n = size(A, 2)
     m = size(A, 1)
