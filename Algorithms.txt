@@ -1,4 +1,4 @@
-This file contains descriptions for all the algorithms and methods contained in this project. Its main purpose
+This file contains descriptions for all the main algorithms and methods contained in this project. Its main purpose
 is to serve as a guide on how to write the report on the simplex method.
 
 ⭐ LinearProgram.jl
