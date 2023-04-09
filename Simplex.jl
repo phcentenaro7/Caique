@@ -7,8 +7,7 @@ using Match
 ##Important files
 include("LinearProgram.jl")
 
-##Solution definition
-
+##Solution structure
 #Represents a solution to a linear programming problem.
 mutable struct Solution
     type::Symbol #Whether this is a minimization or maximization problem.
@@ -24,9 +23,9 @@ mutable struct Solution
     end
 end
 
+##Simplex method
 #Produces a solution to the linear programming problem specified.
 #The solution contains the most important data upon completion of the simplex method.
-#Optionally, this function may produce a dataframe containing data on each iteration of the method.
 function simplex(lp::LinearProgram, iB::Vector{Int}, phase::Symbol, type::Symbol, anticycling::Bool, maxiter::Int)
     m = size(lp.A, 1)
     c = []
