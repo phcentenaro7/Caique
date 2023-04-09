@@ -234,8 +234,8 @@ end
 
 function dantzigRule!(iB::Vector{Int}, iN::Vector{Int}, r::Int, k::Int)
     #This little function takes care of Dantzig's rule, according to which we must swap two variables at the end
-    #of each simplex iteration, one being basic and the other being nonbasic. The entering variable k is selected
-    #via pricing operation, while the leaving variable r is selected through the minimum ratio test or an
+    #of each simplex iteration, one being basic and the other being nonbasic. The variable that enters the basis, k,
+    #is selected via pricing operation, while the leaving variable r is selected through the minimum ratio test or an
     #alternative method that is capable of handling cycling problems.
     iB[r], iN[k] = iN[k], iB[r]
 end
