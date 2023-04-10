@@ -31,11 +31,13 @@ mutable struct SimplexData
     yk::Vector{Real}
     iB::Vector{Int}
     iN::Vector{Int}
+    iA::Vector{Int}
     xB::Vector{Real}
     bbar::Vector{Real}
     Blu::LU
     iter::Int
     anticycling::Bool
+    type::Symbol
     solution::Solution
     
     function SimplexData()
@@ -43,9 +45,9 @@ mutable struct SimplexData
     end
 end
 
-function simplex(lp::LinearProgram, iB::Vector{Int}, phase::Symbol, type::Symbol, anticycling::Bool, maxiter::Int)
+function simplex(lp::LinearProgram, iB::Vector{Int}, type::Symbol, anticycling::Bool, maxiter::Int)
     data = SimplexData()
-    initializeSimplex!(lp, iB, phase, type, anticycling, data)
+    initializeSimplex!(lp, iB, type, anticycling, data)
     while data.iter < maxiter
         initialStep!(data)
         pricing!(data) && return data.solution
@@ -56,28 +58,31 @@ function simplex(lp::LinearProgram, iB::Vector{Int}, phase::Symbol, type::Symbol
     return data.solution
 end
 
-function initializeSimplex!(lp::LinearProgram, iB::Vector{Int}, phase::Symbol, type::Symbol, anticycling::Bool, d::SimplexData)
+function initializeSimplex!(lp::LinearProgram, iB::Vector{Int}, type::Symbol, anticycling::Bool, d::SimplexData)
     d.m = size(lp.A, 1)
-    @match phase begin
-        :one => begin
+    @match type begin
+        :firstPhase => begin
             nart = length(lp.iA)
             d.n = size(lp.A, 2)
             d.c = vcat(zeros(d.n - nart), ones(nart))
         end
-        :two => begin
+        :min => begin
             d.n = size(lp.A, 2) - length(lp.iA)
-            d.c = @match type begin
-                :max => -lp.c
-                :min => lp.c[:]
-                _ => throw(ArgumentError("Argument 'type' must be :min for minimization or :max for maximization."))
-            end
+            d.c = lp.c[:]
         end
+        :max => begin
+            d.n = size(lp.A, 2) - length(lp.iA)
+            d.c = -lp.c[:]
+        end
+        _ => throw(ArgumentError("Argument 'type' must be :min for minimization, :max for maximization or :firstPhase for a first-phase procedure."))
     end
     d.A = @view lp.A[:, 1:d.n]
     d.b = @view lp.b[:]
-    d.iB = iB
+    d.iA = @view lp.iA[:]
+    d.iB = copy(iB)
     d.iN = setdiff(1:d.n, d.iB)
     d.anticycling = anticycling
+    d.type = type
     d.solution = Solution(type, :tired, [0. 0], Real[], iB, 0, 1)
     d.iter = 1
 end
@@ -96,7 +101,19 @@ function pricing!(d::SimplexData)
     zbar = N'w - d.c[d.iN]
     zbark, d.k = findmax(zbar)
     if zbark <= 0
-        d.solution.conclusion = :bounded
+        @match d.type begin
+            :firstPhase => begin
+                artInBase = findall(x -> x in d.iA, d.iB)
+                if !isnothing(findfirst(x -> x > 0, d.xB[artInBase]))
+                    d.solution.conclusion = :unfeasible
+                else
+                    d.solution.conclusion = :feasible
+                end
+            end
+            _ => begin
+                d.solution.conclusion = :bounded
+            end
+        end
         d.solution.xB = d.xB
         d.solution.iB = d.iB
         d.solution.z = d.z
@@ -111,10 +128,10 @@ function unboundednessTest!(d::SimplexData)
     d.yk = d.Blu\ak
     if maximum(d.yk) <= 0
         ek = zeros(d.n-d.m)
-        ek[k] = 1
+        ek[d.k] = 1
         d.solution.conclusion = :unbounded
         d.solution.ray = [d.bbar -d.yk; zeros(d.n-d.m) ek]
-        d.z = @match type begin
+        d.solution.z = @match d.type begin
             :max => Inf
             :min => -Inf
         end

@@ -3,13 +3,18 @@ include("Simplex.jl")
 function solve(lp::LinearProgram; iB::Vector{Int}=Int[], type::Symbol=:min, form::Symbol=:default,
     anticycling::Bool=true, maxiter::Int=100)
     if form == :default
-        if isempty(iB)
-            iB = copy(lp.iB)
+        @match type begin
+            :firstPhase => begin
+                return simplex(lp, lp.iB, :firstPhase, anticycling, maxiter)
+            end
+            :min || :max => begin
+                if isempty(iB)
+                    phaseOne = simplex(lp, lp.iB, :firstPhase, anticycling, maxiter)
+                    phaseOne.conclusion == :unfeasible && return phaseOne
+                    return simplex(lp, phaseOne.iB, type, anticycling, maxiter)
+                end
+                return simplex(lp, iB, type, anticycling, maxiter)
+            end 
         end
-        if !isempty(lp.iA)
-            firstPhase = simplex(lp, iB, :one, type, anticycling, maxiter)
-            iB = firstPhase.iB
-        end
-        return simplex(lp, iB, :two, type, anticycling, maxiter)
     end
 end
