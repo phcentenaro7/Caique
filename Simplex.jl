@@ -48,13 +48,17 @@ end
 function simplex(lp::LinearProgram, iB::Vector{Int}, type::Symbol, anticycling::Bool, maxiter::Int)
     data = SimplexData()
     initializeSimplex!(lp, iB, type, anticycling, data)
-    while data.iter < maxiter
+    while data.iter <= maxiter
         initialStep!(data)
+        @show data.iB
+        @show data.xB
+        @show data.z
         pricing!(data) && return data.solution
         unboundednessTest!(data) && return data.solution
         blockingVariableSelection!(data)
         dantzigRule!(data)
     end
+    data.solution.iterations = data.iter - 1
     return data.solution
 end
 
@@ -100,6 +104,7 @@ function pricing!(d::SimplexData)
     N = @view d.A[:, d.iN]
     zbar = N'w - d.c[d.iN]
     zbark, d.k = findmax(zbar)
+    @show zbar
     if zbark <= 0
         @match d.type begin
             :firstPhase => begin
@@ -117,7 +122,6 @@ function pricing!(d::SimplexData)
         d.solution.xB = d.xB
         d.solution.iB = d.iB
         d.solution.z = d.z
-        d.solution.iterations = d.iter
         return true
     end
     return false
@@ -125,6 +129,8 @@ end
 
 function unboundednessTest!(d::SimplexData)
     ak = d.A[:, d.iN[d.k]]
+    @show ak
+    @show d.iN[d.k]
     d.yk = d.Blu\ak
     if maximum(d.yk) <= 0
         ek = zeros(d.n-d.m)
@@ -137,7 +143,6 @@ function unboundednessTest!(d::SimplexData)
         end
         d.solution.xB = d.xB
         d.solution.iB = d.iB
-        d.solution.iterations = d.iter
         return true
     end
     return false

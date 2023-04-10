@@ -67,5 +67,5 @@ begin
     s = [:greater, :greater]
     b = [5, 3]
     lp = LinearProgram(c, A, s, b)
-    sol = solve(lp, type=:max)
+    sol = solve(lp)
 end

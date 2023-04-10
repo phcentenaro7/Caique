@@ -11,7 +11,11 @@ function solve(lp::LinearProgram; iB::Vector{Int}=Int[], type::Symbol=:min, form
                 if isempty(iB)
                     phaseOne = simplex(lp, lp.iB, :firstPhase, anticycling, maxiter)
                     phaseOne.conclusion == :unfeasible && return phaseOne
-                    return simplex(lp, phaseOne.iB, type, anticycling, maxiter)
+                    phaseOne.conclusion == :tired && return phaseOne
+                    iter = phaseOne.iterations
+                    solution = simplex(lp, phaseOne.iB, type, anticycling, maxiter)
+                    solution.iterations += iter - 1
+                    return solution
                 end
                 return simplex(lp, iB, type, anticycling, maxiter)
             end 
