@@ -5,20 +5,6 @@ using Match
 
 include("LinearProgram.jl")
 
-mutable struct Solution
-    type::Symbol #Whether this is a minimization or maximization problem.
-    conclusion::Symbol #Whether the problem is bounded, unbounded or tired.
-    ray::Matrix #In case the problem is unbounded, this matrix contains the vectors of the ray sum [bbar; 0] + xk[-yk; ek].
-    xB::Vector{Real} #Variable values.
-    iB::Vector{Int} #Basic variable indices.
-    z::Real #Objective value at the optimal point.
-    iterations::Int #Real of iterations it took to complete the solution.
-        function Solution(type::Symbol, conclusion::Symbol, ray::Matrix, xB::Vector, iB::Vector{Int},
-        z, iterations::Int)
-        new(type, conclusion, ray, xB, iB, z, iterations)
-    end
-end
-
 mutable struct SimplexData
     A::Matrix{Real}
     b::Vector{Real}
@@ -41,7 +27,6 @@ mutable struct SimplexData
     type::Symbol
     conclusion::Symbol
     ray::Matrix
-    solution::Solution
     
     function SimplexData()
         new()
