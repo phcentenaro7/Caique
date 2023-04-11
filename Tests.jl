@@ -5,6 +5,17 @@ include("Simplex.jl")
 include("Solve.jl")
 ##
 
+#Bazaraa
+##Example 4.5
+begin
+    c = [-1, 2, -3]
+    A = [1 1 1; -1 1 2; 0 2 3; 0 0 1]
+    s = [:equal, :equal, :equal, :less]
+    b = [6, 4, 10, 2]
+    lp = LinearProgram(c, A, s, b)
+    sol = solve(lp)
+end
+
 #Linear Programming With Matlab
 ##Example 3-4-1
 begin

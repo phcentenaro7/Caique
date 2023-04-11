@@ -35,9 +35,12 @@ mutable struct SimplexData
     xB::Vector{Real}
     bbar::Vector{Real}
     Blu::LU
+    redundantRows::Vector{Int}
     iter::Int
     anticycling::Bool
     type::Symbol
+    conclusion::Symbol
+    ray::Matrix
     solution::Solution
     
     function SimplexData()
@@ -45,24 +48,21 @@ mutable struct SimplexData
     end
 end
 
-function simplex(lp::LinearProgram, iB::Vector{Int}, type::Symbol, anticycling::Bool, maxiter::Int)
+function simplex(lp::LinearProgram, iB::Vector{Int}, type::Symbol, anticycling::Bool, maxiter::Int; redundantRows::Vector{Int}=Int[])
     data = SimplexData()
-    initializeSimplex!(lp, iB, type, anticycling, data)
+    initializeSimplex!(lp, iB, type, anticycling, redundantRows, data)
     while data.iter <= maxiter
         initialStep!(data)
-        @show data.iB
-        @show data.xB
-        @show data.z
-        pricing!(data) && return data.solution
-        unboundednessTest!(data) && return data.solution
+        pricing!(data) && return data
+        unboundednessTest!(data) && return data
         blockingVariableSelection!(data)
         dantzigRule!(data)
     end
-    data.solution.iterations = data.iter - 1
-    return data.solution
+    data.iter -= 1
+    return data
 end
 
-function initializeSimplex!(lp::LinearProgram, iB::Vector{Int}, type::Symbol, anticycling::Bool, d::SimplexData)
+function initializeSimplex!(lp::LinearProgram, iB::Vector{Int}, type::Symbol, anticycling::Bool, redundantRows::Vector{Int}, d::SimplexData)
     d.m = size(lp.A, 1)
     @match type begin
         :firstPhase => begin
@@ -80,14 +80,16 @@ function initializeSimplex!(lp::LinearProgram, iB::Vector{Int}, type::Symbol, an
         end
         _ => throw(ArgumentError("Argument 'type' must be :min for minimization, :max for maximization or :firstPhase for a first-phase procedure."))
     end
-    d.A = @view lp.A[:, 1:d.n]
-    d.b = @view lp.b[:]
+    d.redundantRows = redundantRows
+    validRows = setdiff(collect(1:d.m), d.redundantRows)
+    d.A = @view lp.A[validRows, 1:d.n]
+    d.b = @view lp.b[validRows]
     d.iA = @view lp.iA[:]
     d.iB = copy(iB)
     d.iN = setdiff(1:d.n, d.iB)
     d.anticycling = anticycling
     d.type = type
-    d.solution = Solution(type, :tired, [0. 0], Real[], iB, 0, 1)
+    d.conclusion = :tired
     d.iter = 1
 end
 
@@ -104,24 +106,29 @@ function pricing!(d::SimplexData)
     N = @view d.A[:, d.iN]
     zbar = N'w - d.c[d.iN]
     zbark, d.k = findmax(zbar)
-    @show zbar
     if zbark <= 0
         @match d.type begin
             :firstPhase => begin
                 artInBase = findall(x -> x in d.iA, d.iB)
-                if !isnothing(findfirst(x -> x > 0, d.xB[artInBase]))
-                    d.solution.conclusion = :unfeasible
+                nonzeroArtificials = findfirst(x -> x > 0, d.xB[artInBase])
+                if isnothing(nonzeroArtificials) == false
+                    d.conclusion = :unfeasible
                 else
-                    d.solution.conclusion = :feasible
+                    if isnothing(artInBase) == false
+                        for i in artInBase
+                            popat!(d.iB, i)
+                            popat!(d.xB, i)
+                            popat!(d.b, i)
+                            push!(d.redundantRows, i)
+                        end
+                    end
+                    d.conclusion = :feasible
                 end
             end
             _ => begin
-                d.solution.conclusion = :bounded
+                d.conclusion = :bounded
             end
         end
-        d.solution.xB = d.xB
-        d.solution.iB = d.iB
-        d.solution.z = d.z
         return true
     end
     return false
@@ -129,20 +136,18 @@ end
 
 function unboundednessTest!(d::SimplexData)
     ak = d.A[:, d.iN[d.k]]
-    @show ak
-    @show d.iN[d.k]
     d.yk = d.Blu\ak
     if maximum(d.yk) <= 0
         ek = zeros(d.n-d.m)
         ek[d.k] = 1
-        d.solution.conclusion = :unbounded
-        d.solution.ray = [d.bbar -d.yk; zeros(d.n-d.m) ek]
-        d.solution.z = @match d.type begin
+        d.conclusion = :unbounded
+        d.ray = [d.bbar -d.yk; zeros(d.n-d.m) ek]
+        d.z = @match d.type begin
             :max => Inf
             :min => -Inf
         end
-        d.solution.xB = d.xB
-        d.solution.iB = d.iB
+        d.xB = d.xB
+        d.iB = d.iB
         return true
     end
     return false
@@ -158,7 +163,10 @@ end
 function minRatioTest!(d::SimplexData)
     ratios = []
     for i in 1:d.m
-        if d.yk[i] > 0
+        if d.iB[i] in d.iA && d.bbar[i] == 0
+            d.r = i
+            return
+        elseif d.yk[i] > 0
             push!(ratios, d.bbar[i]/d.yk[i])
         else
             push!(ratios, Inf)
