@@ -163,7 +163,10 @@ end
 function lexicographicRule!(d::SimplexData)
     ratios = []
     for i in 1:d.m
-        if d.yk[i] > 0
+        if d.iB[i] in d.iA && d.bbar[i] == 0
+            d.r = i
+            return
+        elseif d.yk[i] > 0
             push!(ratios, d.bbar[i]/d.yk[i])
         else
             push!(ratios, Inf)
