@@ -77,6 +77,10 @@ function createArtificialSubmatrix!(c::Vector, A::Matrix, slack::Matrix, iB::Vec
     artificial = Array{Float64}(undef, m, 0)
     if nslack == 0
         artificial = I(m)
+        for i in n+1:n+m
+            push!(iA, i)
+            push!(iB, i)
+        end
     else
         row = 1
         indexA = n + nslack + 1 #Index of the current artificial variable to be added to the base.

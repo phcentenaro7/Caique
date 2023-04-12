@@ -21,7 +21,7 @@ mutable struct SimplexData
     xB::Vector{Real}
     bbar::Vector{Real}
     Blu::LU
-    redundantRows::Vector{Int}
+    validRows::Vector{Int}
     iter::Int
     anticycling::Bool
     type::Symbol
@@ -33,9 +33,9 @@ mutable struct SimplexData
     end
 end
 
-function simplex(lp::LinearProgram, iB::Vector{Int}, type::Symbol, anticycling::Bool, maxiter::Int; redundantRows::Vector{Int}=Int[])
+function simplex(lp::LinearProgram, iB::Vector{Int}, type::Symbol, anticycling::Bool, maxiter::Int; validRows::Vector{Int}=collect(1:size(lp.A, 1)))
     data = SimplexData()
-    initializeSimplex!(lp, iB, type, anticycling, redundantRows, data)
+    initializeSimplex!(lp, iB, type, anticycling, validRows, data)
     while data.iter <= maxiter
         initialStep!(data)
         pricing!(data) && return data
@@ -47,8 +47,7 @@ function simplex(lp::LinearProgram, iB::Vector{Int}, type::Symbol, anticycling::
     return data
 end
 
-function initializeSimplex!(lp::LinearProgram, iB::Vector{Int}, type::Symbol, anticycling::Bool, redundantRows::Vector{Int}, d::SimplexData)
-    d.m = size(lp.A, 1)
+function initializeSimplex!(lp::LinearProgram, iB::Vector{Int}, type::Symbol, anticycling::Bool, validRows::Vector{Int}, d::SimplexData)
     @match type begin
         :firstPhase => begin
             nart = length(lp.iA)
@@ -65,9 +64,9 @@ function initializeSimplex!(lp::LinearProgram, iB::Vector{Int}, type::Symbol, an
         end
         _ => throw(ArgumentError("Argument 'type' must be :min for minimization, :max for maximization or :firstPhase for a first-phase procedure."))
     end
-    d.redundantRows = redundantRows
-    validRows = setdiff(collect(1:d.m), d.redundantRows)
     d.A = @view lp.A[validRows, 1:d.n]
+    d.m = size(d.A, 1)
+    d.validRows = validRows
     d.b = @view lp.b[validRows]
     d.iA = @view lp.iA[:]
     d.iB = copy(iB)
@@ -99,14 +98,16 @@ function pricing!(d::SimplexData)
                 if isnothing(nonzeroArtificials) == false
                     d.conclusion = :unfeasible
                 else
+                    redundantRows = Int[]
                     if isnothing(artInBase) == false
                         for i in artInBase
                             popat!(d.iB, i)
                             popat!(d.xB, i)
                             popat!(d.b, i)
-                            push!(d.redundantRows, i)
+                            push!(redundantRows, i)
                         end
                     end
+                    d.validRows = setdiff(collect(1:d.m), redundantRows)
                     d.conclusion = :feasible
                 end
             end
@@ -147,7 +148,7 @@ end
 
 function minRatioTest!(d::SimplexData)
     ratios = []
-    for i in 1:d.m
+    for i in d.m
         if d.iB[i] in d.iA && d.bbar[i] == 0
             d.r = i
             return

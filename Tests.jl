@@ -16,6 +16,18 @@ begin
     sol = solve(lp)
 end
 
+#Bertsimas
+##Example 3.8
+begin
+    c = [1, 1, 1, 0]
+    A = [1 2 3 0; -1 2 6 0; 0 4 9 0; 0 0 3 4]
+    s = [:equal, :equal, :equal, :equal]
+    b = [3, 2, 5, 1]
+    lp = LinearProgram(c, A, s, b)
+    sol = solve(lp, type=:firstPhase)
+    sol2 = solve(lp)
+end
+
 #Linear Programming With Matlab
 ##Example 3-4-1
 begin
