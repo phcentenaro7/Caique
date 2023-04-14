@@ -1,5 +1,4 @@
-function solve(lp::LinearProgram; iB::Vector{Int}=Int[], type::Symbol=:min, form::Symbol=:default,
-    anticycling::Bool=true, maxiter::Int=100)
+function solve(lp::LinearProgram; iB::Vector{Int}=Int[], type::Symbol=:min, anticycling::Bool=true, maxiter::Int=100)
     @match type begin
         :firstPhase => begin
             return simplex(lp, lp.iB, :firstPhase, anticycling, maxiter)
