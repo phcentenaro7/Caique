@@ -3,6 +3,6 @@ message: "If you use this software, please cite it as below."
 authors:
   - family-names: Centenaro
     given-names: Pedro Henrique
-title: "Caique Simplex"
+title: "Caique.jl"
 version: 1.0.0
-date-released: 2023-04-19
+date-released: 2023-04-20
