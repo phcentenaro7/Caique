@@ -111,7 +111,11 @@ function pricing!(d::SimplexData)
                     d.conclusion = :feasible
                 end
             end
-            _ => begin
+            :max => begin
+                d.conclusion = :bounded
+                d.z = -d.z
+            end
+            :min => begin
                 d.conclusion = :bounded
             end
         end
