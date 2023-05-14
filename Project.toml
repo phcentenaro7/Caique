@@ -1,7 +1,7 @@
 name = "Caique"
 uuid = "a341ccb3-ffa1-4681-8b49-8250c714fd5d"
 authors = ["pcentenaro "]
-version = "0.1.0"
+version = "1.0.0"
 
 [deps]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
