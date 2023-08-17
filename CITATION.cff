@@ -1,8 +1,8 @@
-cff-version: 1.0.0
+cff-version: 0.0.0
 message: "If you use this software, please cite it as below."
 authors:
   - family-names: Centenaro
     given-names: Pedro Henrique
 title: "Caique.jl"
-version: 1.0.0
+version: 0.0.0
 date-released: 2023-04-20
